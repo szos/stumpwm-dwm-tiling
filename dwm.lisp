@@ -190,11 +190,11 @@ tiling with a master window and a window stack. "
 
 (add-hook *destroy-window-hook* 'dwm-destroy-window-hook)
 
-(defun dwm-new-window-hook (window)
-  (when (typep (window-group window) 'dwm-group)
-    (dwm-group-add-window window)))
+;; (defun dwm-new-window-hook (window)
+;;   (when (typep (window-group window) 'dwm-group)
+;;     (dwm-group-add-window window)))
 
-(add-hook *new-window-hook* 'dwm-new-window-hook)
+;; (add-hook *new-window-hook* 'dwm-new-window-hook)
 
 ;; (add-hook *destroy-window-hook* 'dwm-destroy-window-hook)
 
@@ -202,22 +202,67 @@ tiling with a master window and a window stack. "
 ;;; group-add-window method ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; (defclass dwm-window (tile-window) ())
+(defclass dwm-window (tile-window) ())
 
-;; (defmethod group-add-window ((group dwm-group) window &key frame raise &allow-other-keys)
-;;   (cond ((typep window 'float-window)
-;; 	 (call-next-method))
-;; 	((eq frame :float)
-;; 	 (change-class window 'float-window)
-;; 	 (float-window-align window)
-;; 	 (when raise (group-focus-window group window)))
-;; 	(t
-;; 	 (change-class window 'dwm-window)
-;; 	 (setf (window-frame window) (frame-by-number group 0))
-;; 	 (setf (frame-window (frame-by-number group 0)) window)
-;; 	 (sync-frame-windows group (window-frame window))
-;; 	 (when (null (frame-window (window-frame window)))
-;; 	   (frame-raise-window (window-group window) (window-frame window)
-;; 			       window nil)))))
-
+(defmethod group-add-window ((group dwm-group) window &key frame &allow-other-keys)
+  (cond ((typep window 'float-window)
+	 ;; (call-next-method)
+	 (message "Floating windows in dwm-groups is currently not supported"))
+	((eq frame :float)
+	 ;; (change-class window 'float-window)
+	 ;; (float-window-align window)
+	 ;; (when raise (group-focus-window group window))
+	 (message "Floating windows in dwm-groups is currently not supported"))
+	(t
+	 (change-class window 'dwm-window)
+	 (setf (window-frame window) (frame-by-number group 0))
+	 ;; (setf (frame-window (frame-by-number group 0)) window)
+	 (case (length (group-frames group))
+	   (1
+	    (when (> (length (group-windows group)) 1)
+	      (message "two windows!")
+	      (dwm-hsplit "2/3")
+	      (let* ((prev-win (dwm-group-master-window group))
+		     (prev-win-new-frame (car (remove (frame-by-number group 0)
+						      (group-frames group)))))
+		(push prev-win (dwm-group-window-stack group))
+		;; because we just hsplit, we know that there must be 2+ groups
+		(setf (window-frame prev-win) prev-win-new-frame
+		      ;; (frame-window prev-win-new-frame) prev-win
+		      (window-frame window) (frame-by-number group 0)
+		      ;; (frame-window (frame-by-number group 0)) window
+		      )))
+	    (setf (dwm-group-master-window group) window))
+	   (otherwise
+	    (let* ((master-frame
+		     (or (window-frame (dwm-group-master-window group))
+			 (frame-by-number group 0)))
+		   (frames-no-master (remove master-frame (group-frames group))))
+	      (push (dwm-group-master-window group) (dwm-group-window-stack group))
+	      (setf (window-frame (dwm-group-master-window group))
+		    (car frames-no-master)
+		    ;; (frame-window (car frames-no-master))
+		    ;; (dwm-group-master-window group)
+		    )
+	      (handler-case
+		  (progn
+		    (dwm-vsplit)
+		    (dwm-balance-stack-tree group)
+		    (setf (window-frame window) (frame-by-number group 0)
+			  ;; (frame-window (frame-by-number group 0)) window
+			  )
+		    (focus-frame group (frame-by-number group 0))
+		    (setf (dwm-group-master-window group) window))
+		(dwm-group-too-many-windows ()
+		  (setf (window-frame (dwm-group-master-window group))
+			(frame-by-number group 0))
+		  (pop (dwm-group-window-stack group))
+		  (let ((new-group (find-suitable-dwm-group group)))
+		    (pull-to-group window new-group)
+		    (message "Window ~a sent to group ~a" window new-group)))))))
+	 (loop for frame in (group-frames group)
+	       do (sync-frame-windows group frame))
+	 (when (null (frame-window (window-frame window)))
+	   (frame-raise-window (window-group window) (window-frame window)
+			       window nil)))))
 
