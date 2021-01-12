@@ -10,6 +10,16 @@
   "the maximum number of windows that can be placed in a dwm-group before we 
 attempt to place them in the next dwm-group (or generate a new one)")
 
+(defcommand gnew-dwm (name) ((:rest "Group Name: "))
+  (unless name 
+    (throw 'error :abort))
+  (add-group (current-screen) name :type 'dwm-group))
+
+(defcommand gnewbg-dwm (name) ((:rest "Group Name: "))
+  (unless name
+    (throw 'error :abort))
+  (add-group (current-screen) name :type 'dwm-group :background t))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Redefinied Internals ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -86,46 +96,46 @@ attempt to place them in the next dwm-group (or generate a new one)")
 ;;; Add Window ;;;
 ;;;;;;;;;;;;;;;;;;
 
-(defun dwm-group-add-window (window)
-  "this function should be hung on *new-window-hook*, and implements dwm-style 
-tiling with a master window and a window stack. "
-  (let* ((group (window-group window))
-	 (frames (group-frames group)))
-    (case (length frames)
-      (1
-       (when (> (length (group-windows group)) 1)
-	 (let ((prev-win (dwm-group-master-window group)))
-	   (push prev-win (dwm-group-window-stack group))
-	   ;; the 0th frame is always master
-	   (dwm-hsplit "2/3")
-	   (pull-window prev-win (car (remove (frame-by-number group 0)
-					      (group-frames group))))
-	   (pull-window window (frame-by-number group 0))))
-       (setf (dwm-group-master-window group) window))
-      (otherwise
-       (let* ((master-frame (or (window-frame (dwm-group-master-window group))
-				(frame-by-number group 0)))
-	      (frames-no-master (remove master-frame frames)))
-	 (push (dwm-group-master-window group) (dwm-group-window-stack group))
-	 (pull-window (dwm-group-master-window group) (car frames-no-master))
-	 (handler-case (progn (dwm-vsplit)
-			      (dwm-balance-stack-tree group)
-			      (pull-window window (frame-by-number group 0))
-			      (focus-frame group (frame-by-number group 0))
-			      (setf (dwm-group-master-window group) window))
-	   (dwm-group-too-many-windows ()
-	     ;; (message "handler-case for dwm-group-too-many-windows")
-	     ;; undo the reorganization we did above. 
-	     (pull-window (dwm-group-master-window group)
-			  (frame-by-number group 0))
-	     (pop (dwm-group-window-stack group))
-	     ;; move the window to a new group
-	     (let ((new-group (find-suitable-dwm-group group)))
-	       (pull-to-group window new-group)
-	       ;; focus the window
-	       (focus-all window)
-	       ;; recall this function on the window to properly handle the handoff
-	       (dwm-group-add-window window)))))))))
+;; (defun dwm-group-add-window (window)
+;;   "this function should be hung on *new-window-hook*, and implements dwm-style 
+;; tiling with a master window and a window stack. "
+;;   (let* ((group (window-group window))
+;; 	 (frames (group-frames group)))
+;;     (case (length frames)
+;;       (1
+;;        (when (> (length (group-windows group)) 1)
+;; 	 (let ((prev-win (dwm-group-master-window group)))
+;; 	   (push prev-win (dwm-group-window-stack group))
+;; 	   ;; the 0th frame is always master
+;; 	   (dwm-hsplit "2/3")
+;; 	   (pull-window prev-win (car (remove (frame-by-number group 0)
+;; 					      (group-frames group))))
+;; 	   (pull-window window (frame-by-number group 0))))
+;;        (setf (dwm-group-master-window group) window))
+;;       (otherwise
+;;        (let* ((master-frame (or (window-frame (dwm-group-master-window group))
+;; 				(frame-by-number group 0)))
+;; 	      (frames-no-master (remove master-frame frames)))
+;; 	 (push (dwm-group-master-window group) (dwm-group-window-stack group))
+;; 	 (pull-window (dwm-group-master-window group) (car frames-no-master))
+;; 	 (handler-case (progn (dwm-vsplit)
+;; 			      (dwm-balance-stack-tree group)
+;; 			      (pull-window window (frame-by-number group 0))
+;; 			      (focus-frame group (frame-by-number group 0))
+;; 			      (setf (dwm-group-master-window group) window))
+;; 	   (dwm-group-too-many-windows ()
+;; 	     ;; (message "handler-case for dwm-group-too-many-windows")
+;; 	     ;; undo the reorganization we did above. 
+;; 	     (pull-window (dwm-group-master-window group)
+;; 			  (frame-by-number group 0))
+;; 	     (pop (dwm-group-window-stack group))
+;; 	     ;; move the window to a new group
+;; 	     (let ((new-group (find-suitable-dwm-group group)))
+;; 	       (pull-to-group window new-group)
+;; 	       ;; focus the window
+;; 	       (focus-all window)
+;; 	       ;; recall this function on the window to properly handle the handoff
+;; 	       (dwm-group-add-window window)))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;
 ;;; Destroy Window ;;;
@@ -142,13 +152,13 @@ tiling with a master window and a window stack. "
 (defun dwm-pop-from-stack (group)
   (let ((new-master (pop (dwm-group-window-stack group))))
     (if (not new-master)
-	(progn (dwm-remove-all-splits group)
+	(progn ;; (dwm-remove-all-splits group)
 	       (message "No more windows"))
-	(let ((new-master-frame (window-frame new-master)))
+	(let ((new-master-windows-old-frame (window-frame new-master)))
 	  (setf (dwm-group-master-window group) new-master)
-	  (focus-frame group new-master-frame)
+	  (focus-frame group new-master-windows-old-frame)
 	  (remove-split)
-	  (pull-window (dwm-group-master-window group) (frame-by-number group 0))
+	  (pull-window new-master (frame-by-number group 0))
 	  (dwm-balance-stack-tree group)))))
 
 (defun dwm-destroy-window (window)
@@ -173,22 +183,12 @@ tiling with a master window and a window stack. "
 (defcommand dwm-switch-to-window (number) ((:number "Window Number: "))
   (swap-window-with-main-by-number (current-group) number))
 
-(defcommand gnew-dwm (name) ((:rest "Group Name: "))
-  (unless name 
-    (throw 'error :abort))
-  (add-group (current-screen) name :type 'dwm-group))
+;; (defun dwm-destroy-window-hook (window)
+;;   (when (typep (window-group window) 'dwm-group)
+;;     (dwm-destroy-window window)
+;;     (repack-window-numbers)))
 
-(defcommand gnewbg-dwm (name) ((:rest "Group Name: "))
-  (unless name
-    (throw 'error :abort))
-  (add-group (current-screen) name :type 'dwm-group :background t))
-
-(defun dwm-destroy-window-hook (window)
-  (when (typep (window-group window) 'dwm-group)
-    (dwm-destroy-window window)
-    (repack-window-numbers)))
-
-(add-hook *destroy-window-hook* 'dwm-destroy-window-hook)
+;; (add-hook *destroy-window-hook* 'dwm-destroy-window-hook)
 
 ;; (defun dwm-new-window-hook (window)
 ;;   (when (typep (window-group window) 'dwm-group)
@@ -244,6 +244,7 @@ tiling with a master window and a window stack. "
 		    ;; (frame-window (car frames-no-master))
 		    ;; (dwm-group-master-window group)
 		    )
+	      (focus-frame group (car frames-no-master))
 	      (handler-case
 		  (progn
 		    (dwm-vsplit)
@@ -265,4 +266,16 @@ tiling with a master window and a window stack. "
 	 (when (null (frame-window (window-frame window)))
 	   (frame-raise-window (window-group window) (window-frame window)
 			       window nil)))))
+
+(defmethod group-delete-window ((group dwm-group) (window dwm-window))
+  (let ((frame (window-frame window)))
+    (when (eq (frame-window frame) window)
+      (if (= (frame-number frame) 0)
+	  (dwm-pop-from-stack group)
+	  (let ((top-of-stack-window-number
+		  (window-number (car (dwm-group-window-stack group)))))
+	    (swap-window-with-main-by-number group top-of-stack-window-number)
+	    ;; (dwm-destroy-stack-window group frame window)
+	    (dwm-pop-from-stack group)))
+      (repack-window-numbers))))
 
