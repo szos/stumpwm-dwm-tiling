@@ -355,7 +355,7 @@ desktop when starting."
 		    (dwm-group-window-stack group))
 	      (setf (window-frame (dwm-group-master-window group))
 		    (car frames-no-master))
-	      ;; (focus-frame group (car frames-no-master))
+	      (focus-frame group (car frames-no-master))
 	      (handler-case
 		  (progn
 		    (dwm-vsplit-frame (car frames-no-master))
@@ -404,11 +404,23 @@ desktop when starting."
 	     (frame-raise-window group f (first (frame-windows group f))
 				 nil))))
 	((= (length (group-windows group)) 1)
-	 (push (list "only one window in the group. " (group-windows group)) *dwm-dbg*)
-	 (let ((only (pop (dwm-group-window-stack group))))
+	 ;; (push (list "only one window in the group. " (group-windows group)) *dwm-dbg*)
+	 
+	 (let* ((only (pop (dwm-group-window-stack group)))
+		;; (old-frame (window-frame only))
+		(head (current-head group))
+		(tree (tile-group-frame-head group head)))
 	   (pull-window only (frame-by-number group 0))
 	   (focus-frame group (frame-by-number group 0))
-	   (only)))
+	   (loop for remframe in (remove (frame-by-number group 0)
+					 (group-frames group))
+		 do (setf (tile-group-frame-head group head)
+			  (remove-frame tree remframe)))
+	   (tree-iterate (tile-group-frame-head group head)
+			 (lambda (l) (sync-frame-windows group l)))
+	   (setf (dwm-group-master-window group) only)
+	   ;; (dwm-balance-stack-tree group)
+	   ))
 	(t
 	 (let* ((new-master (pop (dwm-group-window-stack group)))
 		(nm-frame (window-frame new-master))
@@ -418,8 +430,6 @@ desktop when starting."
 	   (setf (tile-group-frame-head group head) (remove-frame tree nm-frame))
 	   (tree-iterate tree (lambda (l) (sync-frame-windows group l)))
 	   (setf (dwm-group-master-window group) new-master)
-	   (dwm-balance-stack-tree group))))
-  ;; (loop for frame in (group-frames group)
-  ;; 	do (sync-frame-windows group frame))
-  )
+	   (dwm-balance-stack-tree group)))))
 
+;; (gprev-with-window) ; problems with this when we have two windows and are removign one. 
