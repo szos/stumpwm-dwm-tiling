@@ -349,34 +349,55 @@ desktop when starting."
 		      ;; (frame-window (frame-by-number group 0)) window
 		      )))
 	    (setf (dwm-group-master-window group) window))
+	   ;; the (2 ...) case is useful but broken. unsure as to why. 
 	   ;; (2 ; we already have one window in the stack a master window.
-	   ;;  (let ((f (window-frame (dwm-group-master-window group)))
-	   ;; 	  (s (window-frame (car (dwm-group-window-stack group)))))
-	   ;;    (pull-window window f)
-	   ;;    (pull-window (dwm-group-master-window group) s)
-	   ;;    (dwm-vsplit-frame s)
-	   ;;    (focus-all window)))
-	   (otherwise
-	    (let* ((master-frame
-		     (or (window-frame (dwm-group-master-window group))
-			 (frame-by-number group 0)))
-		   (frames-no-master (remove master-frame (group-frames group))))
-	      (push (dwm-group-master-window group)
-		    (dwm-group-window-stack group))
-	      (pull-window (dwm-group-master-window group) (car frames-no-master))
-	      (focus-frame group (car frames-no-master))
-	      (handler-case
-		  (progn
-		    (dwm-vsplit-frame (car frames-no-master))
-		    (dwm-balance-stack-tree group)
-		    (pull-window window (frame-by-number group 0))
-		    (focus-frame group (frame-by-number group 0))
-		    (setf (dwm-group-master-window group) window))
-		(dwm-group-too-many-windows ()
-		  (setf (window-frame (dwm-group-master-window group))
-			(frame-by-number group 0))
-		  (pop (dwm-group-window-stack group))
-		  (message "To many windows! Group state is out of whack, please move the most recently added window to another group!"))))))
+	   ;;  ;; ok this works for CREATING windows, but not for MOVING windows
+	   ;;  ;; into the group. when using gnext-with-window we end up with
+	   ;;  ;; the right number of frames but the prev-win is still in the master frame.
+	   ;;  ;; furthermore, the stack gets messed up. I cant help but think that a
+	   ;;  ;; different way of managing the stack (ie not using the frames as they are)
+	   ;;  ;; might be better... 
+	   ;;  (let* ((prev-win (dwm-group-master-window group))
+	   ;; 	   (pwin-new-frame (car (remove (frame-by-number group 0)
+	   ;; 					(group-frames group)))))
+	   ;;    (push prev-win (dwm-group-window-stack group))
+	   ;;    (dwm-vsplit-frame pwin-new-frame)
+	   ;;    (let ((empty-frame (or (loop for frame in (group-frames group)
+	   ;; 			       unless (frame-window frame)
+	   ;; 			       do (return frame))
+	   ;; 			     (car (remove (frame-by-number group 0)
+	   ;; 					  (group-frames group))))))
+	   ;; 	(setf (window-frame prev-win) empty-frame
+	   ;; 	      (window-frame window) (frame-by-number group 0))
+	   ;; 	(setf (dwm-group-master-window group) window)))
+	   ;;  ;;  (let ((f (window-frame (dwm-group-master-window group)))
+	   ;;  ;; 	      (s (window-frame (car (dwm-group-window-stack group)))))
+	   ;;  ;;    (pull-window window f)
+	   ;;  ;;    (pull-window (dwm-group-master-window group) s)
+	   ;;  ;;    (dwm-vsplit-frame s)
+	   ;;  ;;    (focus-all window))
+	   ;;  )
+	    (otherwise
+	     (let* ((master-frame
+		      (or (window-frame (dwm-group-master-window group))
+			  (frame-by-number group 0)))
+		    (frames-no-master (remove master-frame (group-frames group))))
+	       (push (dwm-group-master-window group)
+		     (dwm-group-window-stack group))
+	       (pull-window (dwm-group-master-window group) (car frames-no-master))
+	       (focus-frame group (car frames-no-master))
+	       (handler-case
+		   (progn
+		     (dwm-vsplit-frame (car frames-no-master))
+		     (dwm-balance-stack-tree group)
+		     (pull-window window (frame-by-number group 0))
+		     (focus-frame group (frame-by-number group 0))
+		     (setf (dwm-group-master-window group) window))
+		 (dwm-group-too-many-windows ()
+		   (setf (window-frame (dwm-group-master-window group))
+			 (frame-by-number group 0))
+		   (pop (dwm-group-window-stack group))
+		   (message "To many windows! Group state is out of whack, please move the most recently added window to another group!"))))))
 	 (loop for frame in (group-frames group)
 	       do (sync-frame-windows group frame))
 	 (when (null (frame-window (window-frame window)))
