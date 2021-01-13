@@ -377,27 +377,27 @@ desktop when starting."
 	   ;;  ;;    (dwm-vsplit-frame s)
 	   ;;  ;;    (focus-all window))
 	   ;;  )
-	    (otherwise
-	     (let* ((master-frame
-		      (or (window-frame (dwm-group-master-window group))
-			  (frame-by-number group 0)))
-		    (frames-no-master (remove master-frame (group-frames group))))
-	       (push (dwm-group-master-window group)
-		     (dwm-group-window-stack group))
-	       (pull-window (dwm-group-master-window group) (car frames-no-master))
-	       (focus-frame group (car frames-no-master))
-	       (handler-case
-		   (progn
-		     (dwm-vsplit-frame (car frames-no-master))
-		     (dwm-balance-stack-tree group)
-		     (pull-window window (frame-by-number group 0))
-		     (focus-frame group (frame-by-number group 0))
-		     (setf (dwm-group-master-window group) window))
-		 (dwm-group-too-many-windows ()
-		   (setf (window-frame (dwm-group-master-window group))
-			 (frame-by-number group 0))
-		   (pop (dwm-group-window-stack group))
-		   (message "To many windows! Group state is out of whack, please move the most recently added window to another group!"))))))
+	   (otherwise
+	    (let* ((master-frame
+		     (or (window-frame (dwm-group-master-window group))
+			 (frame-by-number group 0)))
+		   (frames-no-master (remove master-frame (group-frames group))))
+	      (push (dwm-group-master-window group)
+		    (dwm-group-window-stack group))
+	      (pull-window (dwm-group-master-window group) (car frames-no-master))
+	      (focus-frame group (car frames-no-master))
+	      (handler-case
+		  (progn
+		    (dwm-vsplit-frame (car frames-no-master))
+		    (dwm-balance-stack-tree group)
+		    (pull-window window (frame-by-number group 0))
+		    (focus-frame group (frame-by-number group 0))
+		    (setf (dwm-group-master-window group) window))
+		(dwm-group-too-many-windows ()
+		  (setf (window-frame (dwm-group-master-window group))
+			(frame-by-number group 0))
+		  (pop (dwm-group-window-stack group))
+		  (message "To many windows! Group state is out of whack, please move the most recently added window to another group!"))))))
 	 (loop for frame in (group-frames group)
 	       do (sync-frame-windows group frame))
 	 (when (null (frame-window (window-frame window)))
