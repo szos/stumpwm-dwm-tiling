@@ -321,6 +321,13 @@ desktop when starting."
 	 ;; group-add-window method so i think its ok, at least on sbcl. 
 	 (change-class window 'dwm-window)
 	 (setf (window-frame window) (frame-by-number group 0))
+	 ;; (when (and frame raise)
+         ;;   (setf (tile-group-current-frame group) frame
+         ;;         (frame-window frame) nil))
+	 ;; (sync-frame-windows group (window-frame window))
+	 ;; (when (null (frame-window (window-frame window)))
+         ;;   (frame-raise-window (window-group window) (window-frame window)
+         ;;                       window nil))
 	 ;; (push (dwm-group-master-window group) (dwm-group-window-stack group))
 	 ;; (setf (dwm-group-master-window group) window)
 	 ;; (setf (frame-window (frame-by-number group 0)) window)
@@ -342,35 +349,26 @@ desktop when starting."
 		      ;; (frame-window (frame-by-number group 0)) window
 		      )))
 	    (setf (dwm-group-master-window group) window))
+	   ;; (2 ; we already have one window in the stack a master window.
+	   ;;  (let ((f (window-frame (dwm-group-master-window group)))
+	   ;; 	  (s (window-frame (car (dwm-group-window-stack group)))))
+	   ;;    (pull-window window f)
+	   ;;    (pull-window (dwm-group-master-window group) s)
+	   ;;    (dwm-vsplit-frame s)
+	   ;;    (focus-all window)))
 	   (otherwise
-	    ;; (let* ((master-window (dwm-group-master-window group))
-	    ;; 	   (other-windows (dwm-group-window-stack group)))
-	    ;;   (only)
-	    ;;   (dwm-hsplit "2/3")
-	    ;;   (focus-frame group (frame-by-number group 0))
-	    ;;   (pull-window window (frame-by-number group 0))
-	    ;;   (fnext)
-	    ;;   (loop for n from 1 to (length other-windows)
-	    ;; 	    do (dwm-vsplit))
-	    ;;   (focus-frame group (frame-by-number group 0))
-	    ;;   (push master-window (dwm-group-window-stack group))
-	    ;;   (setf (dwm-group-master-window group) window))
 	    (let* ((master-frame
 		     (or (window-frame (dwm-group-master-window group))
 			 (frame-by-number group 0)))
-		   ;; lets say that frame 1 is always where we should go to dwm-vsplit.
 		   (frames-no-master (remove master-frame (group-frames group))))
 	      (push (dwm-group-master-window group)
 		    (dwm-group-window-stack group))
 	      (pull-window (dwm-group-master-window group) (car frames-no-master))
-	      ;; (setf (window-frame (dwm-group-master-window group))
-	      ;; 	    (car frames-no-master))
 	      (focus-frame group (car frames-no-master))
 	      (handler-case
 		  (progn
 		    (dwm-vsplit-frame (car frames-no-master))
 		    (dwm-balance-stack-tree group)
-		    ;; (setf (window-frame window) (frame-by-number group 0))
 		    (pull-window window (frame-by-number group 0))
 		    (focus-frame group (frame-by-number group 0))
 		    (setf (dwm-group-master-window group) window))
@@ -423,9 +421,7 @@ desktop when starting."
 			  (remove-frame tree remframe)))
 	   (tree-iterate (tile-group-frame-head group head)
 			 (lambda (l) (sync-frame-windows group l)))
-	   (setf (dwm-group-master-window group) only)
-	   ;; (dwm-balance-stack-tree group)
-	   ))
+	   (setf (dwm-group-master-window group) only)))
 	(t
 	 (let* ((new-master (pop (dwm-group-window-stack group)))
 		(nm-frame (window-frame new-master))
@@ -436,5 +432,3 @@ desktop when starting."
 	   (tree-iterate tree (lambda (l) (sync-frame-windows group l)))
 	   (setf (dwm-group-master-window group) new-master)
 	   (dwm-balance-stack-tree group)))))
-
-;; (gprev-with-window) ; problems with this when we have two windows and are removign one. 
