@@ -257,6 +257,8 @@ desktop when starting."
 (defcommand dwm-switch () ()
   (prompt-for-swap-window (current-group)))
 
+(define-key *root-map* (kbd "z") "dwm-switch")
+
 (defun dwm-destroy-window-hook (window)
   (when (typep (window-group window) 'dwm-group)
     (dwm-destroy-window window)
@@ -298,6 +300,12 @@ desktop when starting."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; group-add-window method ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun dwm-emergency-new-group (group window)
+  (let ((new-group (find-suitable-dwm-group group)))
+    (pull-to-group window new-group)
+    (focus-all window)
+    (message "Window ~a sent to group ~a" window new-group)))
 
 (defmethod group-add-window ((group dwm-group) window &key frame raise &allow-other-keys)
   (cond ((typep window 'float-window)
@@ -350,28 +358,27 @@ desktop when starting."
 	    (let* ((master-frame
 		     (or (window-frame (dwm-group-master-window group))
 			 (frame-by-number group 0)))
+		   ;; lets say that frame 1 is always where we should go to dwm-vsplit.
 		   (frames-no-master (remove master-frame (group-frames group))))
 	      (push (dwm-group-master-window group)
 		    (dwm-group-window-stack group))
-	      (setf (window-frame (dwm-group-master-window group))
-		    (car frames-no-master))
+	      (pull-window (dwm-group-master-window group) (car frames-no-master))
+	      ;; (setf (window-frame (dwm-group-master-window group))
+	      ;; 	    (car frames-no-master))
 	      (focus-frame group (car frames-no-master))
 	      (handler-case
 		  (progn
 		    (dwm-vsplit-frame (car frames-no-master))
 		    (dwm-balance-stack-tree group)
-		    (setf (window-frame window) (frame-by-number group 0))
+		    ;; (setf (window-frame window) (frame-by-number group 0))
+		    (pull-window window (frame-by-number group 0))
 		    (focus-frame group (frame-by-number group 0))
 		    (setf (dwm-group-master-window group) window))
 		(dwm-group-too-many-windows ()
 		  (setf (window-frame (dwm-group-master-window group))
 			(frame-by-number group 0))
 		  (pop (dwm-group-window-stack group))
-		  (message "To many windows! Group state is out of whack, please move the most recently added window to another group!")
-		  (let ((new-group (find-suitable-dwm-group group)))
-		    (pull-to-group window new-group)
-                    (focus-all window)
-		    (message "Window ~a sent to group ~a" window new-group)))))))
+		  (message "To many windows! Group state is out of whack, please move the most recently added window to another group!"))))))
 	 (loop for frame in (group-frames group)
 	       do (sync-frame-windows group frame))
 	 (when (null (frame-window (window-frame window)))
@@ -405,9 +412,7 @@ desktop when starting."
 				 nil))))
 	((= (length (group-windows group)) 1)
 	 ;; (push (list "only one window in the group. " (group-windows group)) *dwm-dbg*)
-	 
 	 (let* ((only (pop (dwm-group-window-stack group)))
-		;; (old-frame (window-frame only))
 		(head (current-head group))
 		(tree (tile-group-frame-head group head)))
 	   (pull-window only (frame-by-number group 0))
