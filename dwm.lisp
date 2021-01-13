@@ -6,6 +6,8 @@
    (window-stack :initarg :window-stack :initform nil
 		 :accessor dwm-group-window-stack)))
 
+(defclass dwm-window (tile-window) ())
+
 (defparameter *maximum-dwm-group-windows* 7
   "the maximum number of windows that can be placed in a dwm-group before we 
 attempt to place them in the next dwm-group (or generate a new one)")
@@ -204,25 +206,52 @@ attempt to place them in the next dwm-group (or generate a new one)")
 
 ;; (add-hook *destroy-window-hook* 'dwm-destroy-window-hook)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Retile in Case of Emergency ;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun dwm-emergency-retile ()
+  (let ((group (current-group)))
+    (when (typep group 'dwm-group)
+      (let* ((master-window (dwm-group-master-window group))
+	     (other-windows (remove master-window (group-windows group))))
+	;; (dwm-remove-all-splits group)
+	(only)
+	(dwm-hsplit "2/3")
+        (focus-frame group (frame-by-number group 0))
+	(pull-window master-window (frame-by-number group 0))
+	(fnext)
+	(loop for n from 2 to (length other-windows)
+	      do (dwm-vsplit))
+	(focus-frame group (frame-by-number group 0))))))
+
+(defcommand dwm-retile () ()
+  (dwm-emergency-retile))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; group-add-window method ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defclass dwm-window (tile-window) ())
-
-(defmethod group-add-window ((group dwm-group) window &key frame &allow-other-keys)
+(defmethod group-add-window ((group dwm-group) window &key frame raise &allow-other-keys)
   (cond ((typep window 'float-window)
-	 ;; (call-next-method)
-	 (message "Floating windows in dwm-groups is currently not supported"))
+	 (call-next-method)
+	 ;; (message "Floating windows in dwm-groups is currently not supported")
+	 )
 	((eq frame :float)
-	 ;; (change-class window 'float-window)
-	 ;; (float-window-align window)
-	 ;; (when raise (group-focus-window group window))
-	 (message "Floating windows in dwm-groups is currently not supported"))
+	 (change-class window 'float-window)
+	 (float-window-align window)
+	 (when raise (group-focus-window group window))
+	 ;; (message "Floating windows in dwm-groups is currently not supported")
+	 )
 	(t
+	 ;; this is undefined behavior i think, but its done in the other
+	 ;; group-add-window method so i think its ok, at least on sbcl. 
 	 (change-class window 'dwm-window)
 	 (setf (window-frame window) (frame-by-number group 0))
+	 ;; (push (dwm-group-master-window group) (dwm-group-window-stack group))
+	 ;; (setf (dwm-group-master-window group) window)
 	 ;; (setf (frame-window (frame-by-number group 0)) window)
+	 ;; we cant rely on hanging a window on a hook... hmmm. 
 	 (case (length (group-frames group))
 	   (1
 	    (when (> (length (group-windows group)) 1)
@@ -241,24 +270,32 @@ attempt to place them in the next dwm-group (or generate a new one)")
 		      )))
 	    (setf (dwm-group-master-window group) window))
 	   (otherwise
+	    ;; (let* ((master-window (dwm-group-master-window group))
+	    ;; 	   (other-windows (dwm-group-window-stack group)))
+	    ;;   (only)
+	    ;;   (dwm-hsplit "2/3")
+	    ;;   (focus-frame group (frame-by-number group 0))
+	    ;;   (pull-window window (frame-by-number group 0))
+	    ;;   (fnext)
+	    ;;   (loop for n from 1 to (length other-windows)
+	    ;; 	    do (dwm-vsplit))
+	    ;;   (focus-frame group (frame-by-number group 0))
+	    ;;   (push master-window (dwm-group-window-stack group))
+	    ;;   (setf (dwm-group-master-window group) window))
 	    (let* ((master-frame
 		     (or (window-frame (dwm-group-master-window group))
 			 (frame-by-number group 0)))
 		   (frames-no-master (remove master-frame (group-frames group))))
-	      (push (dwm-group-master-window group) (dwm-group-window-stack group))
+	      (push (dwm-group-master-window group)
+		    (dwm-group-window-stack group))
 	      (setf (window-frame (dwm-group-master-window group))
-		    (car frames-no-master)
-		    ;; (frame-window (car frames-no-master))
-		    ;; (dwm-group-master-window group)
-		    )
+		    (car frames-no-master))
 	      (focus-frame group (car frames-no-master))
 	      (handler-case
 		  (progn
 		    (dwm-vsplit)
 		    (dwm-balance-stack-tree group)
-		    (setf (window-frame window) (frame-by-number group 0)
-			  ;;(frame-window (frame-by-number group 0)) window
-			  )
+		    (setf (window-frame window) (frame-by-number group 0))
 		    (focus-frame group (frame-by-number group 0))
 		    (setf (dwm-group-master-window group) window))
 		(dwm-group-too-many-windows ()
@@ -269,12 +306,15 @@ attempt to place them in the next dwm-group (or generate a new one)")
 		  (let ((new-group (find-suitable-dwm-group group)))
 		    (pull-to-group window new-group)
                     (focus-all window)
-		    (message "Window ~a sent to group ~a" window new-group)))))))
+		    (message "Window ~a sent to group ~a" window new-group)))))
+	    ))
 	 (loop for frame in (group-frames group)
 	       do (sync-frame-windows group frame))
 	 (when (null (frame-window (window-frame window)))
 	   (frame-raise-window (window-group window) (window-frame window)
-			       window nil)))))
+			       window nil))
+	 ;; (run-with-timer 1 nil 'dwm-emergency-retile)
+	 )))
 
 (defmethod group-delete-window ((group dwm-group) (window dwm-window))
   (cond ((member window (dwm-group-window-stack group))
