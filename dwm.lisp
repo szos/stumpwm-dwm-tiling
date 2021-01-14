@@ -1,6 +1,7 @@
 (in-package :stumpwm)
 
 (defparameter *dwm-dbg* nil)
+(defparameter *dwm-nf-dbg* nil)
 
 (defclass dwm-group (tile-group)
   ((master-window :initarg :master-window :initform nil
@@ -138,6 +139,11 @@ desktop when starting."
   (dwm-split-frame-in-dir-with-frame (current-group) frame :column (read-from-string ratio)))
 (defun dwm-vsplit-frame (frame &optional (ratio "1/2"))
   (dwm-split-frame-in-dir-with-frame (current-group) frame :row (read-from-string ratio)))
+
+(defun find-empty-frames (&optional (group (current-group)))
+  (loop for frame in (group-frames group)
+	when (null (frame-window frame))
+	  collect frame))
 
 (defun dwm-balance-stack-tree (&optional (group (current-group)))
   (let ((tree (tile-group-frame-head group (current-head))))
@@ -301,6 +307,46 @@ desktop when starting."
 ;;; group-add-window method ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defvar *move-window-hook* nil
+  "called at the very end of move-window-to-group. functions take a window")
+
+(defun move-window-to-group (window to-group)
+  (if (equalp to-group (window-group window))
+      (message "That window is already in the group ~a." (group-name to-group))
+      (labels ((really-move-window (window to-group)
+                 (unless (eq (window-group window) to-group)
+                   (hide-window window)
+                   ;; house keeping
+                   (setf (group-windows (window-group window))
+                         (remove window (group-windows (window-group window))))
+                   (group-delete-window (window-group window) window)
+                   (setf (window-group window) to-group
+                         (window-number window) (find-free-window-number to-group))
+                   (push window (group-windows to-group))
+                   (xlib:change-property (window-xwin window) :_NET_WM_DESKTOP
+                                         (list (netwm-group-id to-group))
+                                         :cardinal 32)
+                   (group-add-window to-group window))))
+        ;; When a modal window is moved, all the windows it shadows must be moved
+        ;; as well. When a shadowed window is moved, the modal shadowing it must
+        ;; be moved.
+        (cond
+          ((window-modal-p window)
+           (mapc (lambda (w)
+                   (really-move-window w to-group))
+                 (append (list window) (shadows-of window))))
+          ((modals-of window)
+           (mapc (lambda (w)
+                   (move-window-to-group w to-group))
+                 (modals-of window)))
+          (t
+           (really-move-window window to-group)))
+	(run-hook-with-args *move-window-hook* window))))
+
+;; (defun winmove-hook-fn (window))
+
+;; (add-hook *move-window-hook* )
+
 (defun dwm-emergency-new-group (group window)
   (let ((new-group (find-suitable-dwm-group group)))
     (pull-to-group window new-group)
@@ -381,18 +427,31 @@ desktop when starting."
 	    (let* ((master-frame
 		     (or (window-frame (dwm-group-master-window group))
 			 (frame-by-number group 0)))
-		   (frames-no-master (remove master-frame (group-frames group))))
+		   (frames-no-master (remove master-frame (group-frames group)))
+		   (frame-to-split (car frames-no-master)))
 	      (push (dwm-group-master-window group)
 		    (dwm-group-window-stack group))
-	      (pull-window (dwm-group-master-window group) (car frames-no-master))
-	      (focus-frame group (car frames-no-master))
+	      (pull-window window (frame-by-number group 0))
+	      (pull-window (dwm-group-master-window group)
+	      		   (car frames-no-master))
+              (focus-frame group (car frames-no-master))
 	      (handler-case
 		  (progn
-		    (dwm-vsplit-frame (car frames-no-master))
-		    (dwm-balance-stack-tree group)
-		    (pull-window window (frame-by-number group 0))
+		    (dwm-vsplit-frame frame-to-split ;; (car frames-no-master)
+				      )
+		    ;; (let* ((empty (find-empty-frames group))
+		    ;; 	   (nf (car empty)))
+		    ;;   (setf *dwm-nf-dbg* nf)
+		    ;;   (when nf
+		    ;; 	(setf (window-frame (dwm-group-master-window group)) nf
+		    ;; 	      (frame-window nf) (dwm-group-master-window group))
+		    ;; 	(sync-frame-windows group nf)))
+		    ;; (pull-window window (frame-by-number group 0))
+		    ;; (setf (window-frame window) (frame-by-number group 0)
+		    ;; 	  (frame-window (frame-by-number group 0)) window)
 		    (focus-frame group (frame-by-number group 0))
-		    (setf (dwm-group-master-window group) window))
+		    (setf (dwm-group-master-window group) window)
+		    (dwm-balance-stack-tree group))
 		(dwm-group-too-many-windows ()
 		  (setf (window-frame (dwm-group-master-window group))
 			(frame-by-number group 0))
