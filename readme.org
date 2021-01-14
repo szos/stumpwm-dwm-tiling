@@ -1,6 +1,8 @@
 * dwm-groups
   This is an attempt at implementing dwm-style tiling in stumpwm. It is currently mostly functional, but has problems. Please use the generify branch. 
+* NOTES: 
+  The generify branch is working. this will be merged into master soon. 
 * whats working and whats not
-  Currently, it works fine to create windows in a dwm group, up until 7 windows are created. Upon creation of the 8th window, the user should be prompted for a new group name if another dwm-group isnt present. the window will be sent there. however that functionality doesnt work reliably. Moving windows to the group works iff theres 0, 1 or 3+ windows. If theres 2 pre-existing windows in the group, the frames arent set up properly. If you end up in this situation, you can use the command ´dwm-retile´ to remedy the situation. 
+  Currently, it works fine to create windows in a dwm group, up until 7 windows are created. Upon creation of the 8th window, the user should be prompted for a new group name if another dwm-group isnt present. the window will be sent there. however that functionality doesnt work reliably. 
 * wanted
-  I will be the first to admit that I have little to no idea of what im doing. Id love for some help smoothing out the kinks mentioned above, and would appreciate some help figuring out why moving windows to the group behaves differently to creating a window in the group. There also seem to be some functions that cant be called within ´group-add-window´. 
+  I will be the first to admit that I have little to no idea of what im doing. Id love for some help smoothing out the kinks mentioned above. 
