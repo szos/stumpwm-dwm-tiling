@@ -54,15 +54,18 @@ attempt to place them in the next dwm-group (or generate a new one)")
     (gnewbg-dwm name)))
 
 (defun find-suitable-dwm-group (current)
-  (let ((possible-groups
-	  (non-hidden-groups (screen-groups (group-screen current)))))
-    (loop for group in possible-groups
-	  when (and (not (equal current group))
-		    (typep group 'dwm-group)
-		    (< (length (group-windows group))
-		        *maximum-dwm-group-windows*))
-	    do (return-from find-suitable-dwm-group group))
-    (generate-new-dwm-group)))
+  (let* ((all-non-hidden-groups
+	   (non-hidden-groups (screen-groups (group-screen current))))
+	 (possible-groups
+	   (loop for group in all-non-hidden-groups
+		 when (and (not (equal current group))
+			   (typep group 'dwm-group)
+			   (< (length (group-windows group))
+			      *maximum-dwm-group-windows*))
+		   collect group)))
+    (if possible-groups
+	(car possible-groups)
+	(generate-new-dwm-group))))
 
 (define-condition dwm-group-too-many-windows (error) ())
 
@@ -242,16 +245,24 @@ desktop when starting."
 (defun swap-window-with-main (group window-or-number)
   (let* ((stack (dwm-group-window-stack group))
 	 (win (if (numberp window-or-number)
-		  (member window-or-number stack :key 'window-number)
-		  window-or-number))
+		  (car (member window-or-number stack :key 'window-number))
+		   window-or-number))
 	 (old-master (dwm-group-master-window group)))
     (when win
-      (exchange-windows (dwm-group-master-window group) (car win))
-      (setf (dwm-group-master-window group) (car win))
+      (pull-window old-master (window-frame win))
+      (pull-window win (frame-by-number group 0))
       (setf (dwm-group-window-stack group)
-	    (remove (car win) (dwm-group-window-stack group)))
-      (push old-master (dwm-group-window-stack group))
-      (focus-all (car win)))))
+	    (remove win (dwm-group-window-stack group))
+	    (dwm-group-master-window group) win)
+      (focus-all win))
+    ;; (when win
+    ;;   (exchange-windows (dwm-group-master-window group) win)
+    ;;   (setf (dwm-group-master-window group) win)
+    ;;   (setf (dwm-group-window-stack group)
+    ;; 	    (remove win (dwm-group-window-stack group)))
+    ;;   (push old-master (dwm-group-window-stack group))
+    ;;   (focus-all win))
+    ))
 
 (defcommand dwm-switch-to-window (number) ((:number "Window Number: "))
   (swap-window-with-main (current-group) number))
@@ -310,7 +321,7 @@ desktop when starting."
 (defvar *move-window-hook* nil
   "called at the very end of move-window-to-group. functions take a window")
 
-(defun move-window-to-group (window to-group)
+(defun dwm-overflow-move-window-to-group (window to-group)
   (if (equalp to-group (window-group window))
       (message "That window is already in the group ~a." (group-name to-group))
       (labels ((really-move-window (window to-group)
@@ -319,7 +330,7 @@ desktop when starting."
                    ;; house keeping
                    (setf (group-windows (window-group window))
                          (remove window (group-windows (window-group window))))
-                   (group-delete-window (window-group window) window)
+                   ;; (group-delete-window (window-group window) window)
                    (setf (window-group window) to-group
                          (window-number window) (find-free-window-number to-group))
                    (push window (group-windows to-group))
@@ -340,8 +351,7 @@ desktop when starting."
                    (move-window-to-group w to-group))
                  (modals-of window)))
           (t
-           (really-move-window window to-group)))
-	(run-hook-with-args *move-window-hook* window))))
+           (really-move-window window to-group))))))
 
 ;; (defun winmove-hook-fn (window))
 
@@ -352,6 +362,11 @@ desktop when starting."
     (pull-to-group window new-group)
     (focus-all window)
     (message "Window ~a sent to group ~a" window new-group)))
+
+(defun dwm-move-to-overflow-group (window)
+  (let ((group (or (find-group (current-screen) "dwm-overflow-group")
+		   (gnewbg "dwm-overflow-group"))))
+    (dwm-overflow-move-window-to-group window group)))
 
 (defmethod group-add-window ((group dwm-group) window &key frame raise &allow-other-keys)
   (cond ((typep window 'float-window)
@@ -367,17 +382,6 @@ desktop when starting."
 	 ;; group-add-window method so i think its ok, at least on sbcl. 
 	 (change-class window 'dwm-window)
 	 (setf (window-frame window) (frame-by-number group 0))
-	 ;; (when (and frame raise)
-         ;;   (setf (tile-group-current-frame group) frame
-         ;;         (frame-window frame) nil))
-	 ;; (sync-frame-windows group (window-frame window))
-	 ;; (when (null (frame-window (window-frame window)))
-         ;;   (frame-raise-window (window-group window) (window-frame window)
-         ;;                       window nil))
-	 ;; (push (dwm-group-master-window group) (dwm-group-window-stack group))
-	 ;; (setf (dwm-group-master-window group) window)
-	 ;; (setf (frame-window (frame-by-number group 0)) window)
-	 ;; we cant rely on hanging a window on a hook... hmmm. 
 	 (case (length (group-frames group))
 	   (1
 	    (when (> (length (group-windows group)) 1)
@@ -395,34 +399,6 @@ desktop when starting."
 		      ;; (frame-window (frame-by-number group 0)) window
 		      )))
 	    (setf (dwm-group-master-window group) window))
-	   ;; the (2 ...) case is useful but broken. unsure as to why. 
-	   ;; (2 ; we already have one window in the stack a master window.
-	   ;;  ;; ok this works for CREATING windows, but not for MOVING windows
-	   ;;  ;; into the group. when using gnext-with-window we end up with
-	   ;;  ;; the right number of frames but the prev-win is still in the master frame.
-	   ;;  ;; furthermore, the stack gets messed up. I cant help but think that a
-	   ;;  ;; different way of managing the stack (ie not using the frames as they are)
-	   ;;  ;; might be better... 
-	   ;;  (let* ((prev-win (dwm-group-master-window group))
-	   ;; 	   (pwin-new-frame (car (remove (frame-by-number group 0)
-	   ;; 					(group-frames group)))))
-	   ;;    (push prev-win (dwm-group-window-stack group))
-	   ;;    (dwm-vsplit-frame pwin-new-frame)
-	   ;;    (let ((empty-frame (or (loop for frame in (group-frames group)
-	   ;; 			       unless (frame-window frame)
-	   ;; 			       do (return frame))
-	   ;; 			     (car (remove (frame-by-number group 0)
-	   ;; 					  (group-frames group))))))
-	   ;; 	(setf (window-frame prev-win) empty-frame
-	   ;; 	      (window-frame window) (frame-by-number group 0))
-	   ;; 	(setf (dwm-group-master-window group) window)))
-	   ;;  ;;  (let ((f (window-frame (dwm-group-master-window group)))
-	   ;;  ;; 	      (s (window-frame (car (dwm-group-window-stack group)))))
-	   ;;  ;;    (pull-window window f)
-	   ;;  ;;    (pull-window (dwm-group-master-window group) s)
-	   ;;  ;;    (dwm-vsplit-frame s)
-	   ;;  ;;    (focus-all window))
-	   ;;  )
 	   (otherwise
 	    (let* ((master-frame
 		     (or (window-frame (dwm-group-master-window group))
@@ -439,24 +415,19 @@ desktop when starting."
 		  (progn
 		    (dwm-vsplit-frame frame-to-split ;; (car frames-no-master)
 				      )
-		    ;; (let* ((empty (find-empty-frames group))
-		    ;; 	   (nf (car empty)))
-		    ;;   (setf *dwm-nf-dbg* nf)
-		    ;;   (when nf
-		    ;; 	(setf (window-frame (dwm-group-master-window group)) nf
-		    ;; 	      (frame-window nf) (dwm-group-master-window group))
-		    ;; 	(sync-frame-windows group nf)))
-		    ;; (pull-window window (frame-by-number group 0))
-		    ;; (setf (window-frame window) (frame-by-number group 0)
-		    ;; 	  (frame-window (frame-by-number group 0)) window)
 		    (focus-frame group (frame-by-number group 0))
 		    (setf (dwm-group-master-window group) window)
 		    (dwm-balance-stack-tree group))
 		(dwm-group-too-many-windows ()
+		  ;; undo what weve done above.
 		  (setf (window-frame (dwm-group-master-window group))
 			(frame-by-number group 0))
 		  (pop (dwm-group-window-stack group))
-		  (message "To many windows! Group state is out of whack, please move the most recently added window to another group!"))))))
+		  (message "To many windows! Group state is out of whack, please move the most recently added window to another group!")
+		  ;; (dwm-handle-window-overflow group window)
+		  (dwm-move-to-overflow-group window)
+		  (dwm-balance-stack-tree group)
+		  (focus-all window))))))
 	 (loop for frame in (group-frames group)
 	       do (sync-frame-windows group frame))
 	 (when (null (frame-window (window-frame window)))

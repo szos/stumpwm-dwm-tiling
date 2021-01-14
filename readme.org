@@ -3,6 +3,6 @@
 * NOTES: 
   The generify branch is working. this will be merged into master soon. 
 * whats working and whats not
-  Currently, it works fine to create windows in a dwm group, up until 7 windows are created. Upon creation of the 8th window, the user should be prompted for a new group name if another dwm-group isnt present. the window will be sent there. however that functionality doesnt work reliably. 
+  Currently, it works fine to create windows in a dwm group, up until 7 windows are created. Upon creation of the 8th window, the user should be prompted for a new group name if another dwm-group isnt present. the window will be sent there. however that functionality doesnt work reliably. After moving a window to the overflow group, we end up with a messed up master/stack in the dwm group. need to fix that. 
 * wanted
   I will be the first to admit that I have little to no idea of what im doing. Id love for some help smoothing out the kinks mentioned above. 
