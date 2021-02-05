@@ -25,7 +25,8 @@ This implements DWM style tiling in StumpWM by defining a new group and associat
 * Known Issues
   Known issues and quirks with how this group type functions. 
   - Dialogs - Currently dialog windows cause the current master window to be placed on theb stack. For example, the window opened after adding an addon to firefox will cause the master window to be placed on the stack and the dialog window to take the entire master area.
-  - Windows and frames not syncing - Currently, windows and frames should be synced most of the time. However it can occur that they get out of sync. If they do, select the frame and call ~pull-hidden-next~  a couple times to get things synced up. 
+  - Windows and frames not syncing - Currently, windows and frames should be synced most of the time. However it can occur that they get out of sync. If they do, select the frame and call ~pull-hidden-next~  a couple times to get things synced up.
+  - Floating windows - Currently, floating windows are fully untested in dwm groups, and its unknown whether or not they will work or cause massive problems. 
 
 * My Testing Procedure
   Because StumpWM hangs/freezes in certain situations when using this group, the way I go about testing is as such: 
