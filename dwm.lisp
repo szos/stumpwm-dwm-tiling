@@ -406,9 +406,9 @@ desktop when starting."
               (push prev-win (dwm-group-window-stack group))
               ;; because we just hsplit, we know that there must be 2+ groups
               (setf (window-frame prev-win) prev-win-new-frame
-                    ;; (frame-window prev-win-new-frame) prev-win
+                    (frame-window prev-win-new-frame) prev-win
                     (window-frame window) (frame-by-number group 0)
-                    ;; (frame-window (frame-by-number group 0)) window
+                    (frame-window (frame-by-number group 0)) window
                     (dwm-group-master-window group) window)))
            (otherwise
             (message "We already have the stack set up, so put windows there!")
@@ -460,44 +460,48 @@ desktop when starting."
          ;; if were removing the master window
          (message "group-windows: ~S" (group-windows group))
          (let* ((new-master (pop (dwm-group-window-stack group))))
-           (when new-master
-             (let* (new-masters-old-frame (window-frame new-master))
-               (master-frame (frame-by-number group 0))
-               (head (current-head group))
-               (tree (tile-group-frame-head group head)))
-             (cond 
-               ((not (dwm-group-window-stack group)) ; we got only 1 window left
-                (setf (window-frame new-master) master-frame
-                      (frame-window master-frame) new-master
-                      (dwm-group-master-window group) new-master
-                      ;; (tile-group-frame-head group head) master-frame
-                      )
-                ;; remove all other frames
-                (loop for remframe in (remove (frame-by-number group 0)
-                                              (group-frames group))
-                      do (setf (tile-group-frame-head group head)
-                               (remove-frame tree remframe)))
+           (if new-master
+               (let* ((new-masters-old-frame (window-frame new-master))
+                      (master-frame (frame-by-number group 0))
+                      (head (current-head group))
+                      (tree (tile-group-frame-head group head)))
+                 (cond 
+                   ((not (dwm-group-window-stack group)) ; we got 1 window left
+                    (setf (window-frame new-master) master-frame
+                          (frame-window master-frame) new-master
+                          (dwm-group-master-window group) new-master)
+                    ;; remove all other frames
+                    (loop for remframe in (remove (frame-by-number group 0)
+                                                  (group-frames group))
+                          do (setf (tile-group-frame-head group head)
+                                   (remove-frame tree remframe)))
 
-                (setf (tile-group-current-frame group) master-frame)
-                
-                (focus-frame group master-frame)
-                (update-decoration (frame-window master-frame))
-                ;; make sure the frame is balanced - ie take whole screen
-                ;; (setf (frame-x master-frame) 0
-                ;;       (frame-y master-frame) 0
-                ;;       )
-                
-                (loop for frame in (group-frames group)
-                      do (sync-frame-windows group frame)))
-               (t ; we have a stack left and a new master window
-                (setf (tile-group-frame-head group head)
-                      (remove-frame tree new-masters-old-frame)
-                      (window-frame new-master) master-frame
-                      (frame-window master-frame) new-master
-                      (dwm-group-master-window group) new-master)
-                (dwm-balance-stack-tree group)
-                (loop for frame in (group-frames group)
-                      do (sync-frame-windows group frame)))))))
+                    (setf (tile-group-current-frame group) master-frame)
+                    
+                    (focus-frame group master-frame)
+                    (update-decoration (frame-window master-frame))
+                    ;; make sure the frame is balanced - ie take whole screen
+                    ;; (setf (frame-x master-frame) 0
+                    ;;       (frame-y master-frame) 0
+                    ;;       )
+                    
+                    (loop for frame in (group-frames group)
+                          do (sync-frame-windows group frame)))
+                   (t ; we have a stack left and a new master window
+                    (setf (tile-group-frame-head group head)
+                          (remove-frame tree new-masters-old-frame)
+                          (window-frame new-master) master-frame
+                          (frame-window master-frame) new-master
+                          (dwm-group-master-window group) new-master)
+                    (dwm-balance-stack-tree group)
+                    (loop for frame in (group-frames group)
+                          do (sync-frame-windows group frame))
+                    (focus-frame group master-frame))))
+               (let ((f (window-frame window)))
+                 ;; maybe pick a new window for the old frame
+                 (when (eq (frame-window f) window)
+                   (frame-raise-window group f
+                                       (first (frame-windows group f)) nil))))))
         ((member window (dwm-group-window-stack group))
          ;; If were removing a stack window, we want to pop it off and reorganize
          ;; the stack
@@ -506,12 +510,14 @@ desktop when starting."
                 (stackwins-frame (window-frame stackwin))
                 (head (frame-head group stackwins-frame))
                 (tree (tile-group-frame-head group head)))
+           (unless new-stack
+             (setf (dwm-group-master-window group) stackwin))
+           ;; we want to make the new frame tree not contain stackwins frame, as it
+           ;; isnt holding a window any more. 
            (setf (tile-group-frame-head group head)
                  (remove-frame tree stackwins-frame)
                  (dwm-group-window-stack group) new-stack)
-           (tree-iterate tree
-                         (lambda (leaf)
-                           (sync-frame-windows group leaf)))
+           (tree-iterate tree (lambda (leaf) (sync-frame-windows group leaf)))
            (focus-frame group (frame-by-number group 0))
            (dwm-balance-stack-tree group)
            (loop for frame in (group-frames group)
