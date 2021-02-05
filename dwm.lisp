@@ -7,7 +7,9 @@
   ((master-window :initarg :master-window :initform nil
                   :accessor dwm-group-master-window)
    (window-stack :initarg :window-stack :initform nil
-                 :accessor dwm-group-window-stack)))
+                 :accessor dwm-group-window-stack)
+   (superfluous-window :initform nil
+                       :accessor moving-superfluous-window)))
 
 (defclass dwm-window (tile-window) ())
 
@@ -366,6 +368,10 @@ desktop when starting."
         (progn (gnewbg-dwm (read-one-line screen "New DWM Group Name: "))
                (find-open-dwm-group)))))
 
+(let ((counter 0))
+  (defun gen-group-name ()
+    (format nil "Overflow group ~S" (incf counter))))
+
 (defparameter *moving-superfluous-window* nil)
 
 (defmethod group-add-window ((group dwm-group) window &key frame raise &allow-other-keys)
@@ -382,11 +388,11 @@ desktop when starting."
          ;; group-add-window method so i think its ok, at least on sbcl. 
          (change-class window 'dwm-window)
          ;; we always want the new window to be the new master - that means frame 0
+         (setf (window-frame window) (frame-by-number group 0))
          (case (length (group-windows group))
            (1
             (message "moving from 0 to 1 window")
-            (setf (dwm-group-master-window group) window)
-            (setf (window-frame window) (frame-by-number group 0)))
+            (setf (dwm-group-master-window group) window))
            (2
             (message "moving from 1 to 2 windows")
             (let ((frame (frame-by-number group 0)))
@@ -400,9 +406,9 @@ desktop when starting."
               (push prev-win (dwm-group-window-stack group))
               ;; because we just hsplit, we know that there must be 2+ groups
               (setf (window-frame prev-win) prev-win-new-frame
-                    ;; (frame-window prev-win-new-frame) prev-win
+                    (frame-window prev-win-new-frame) prev-win
                     (window-frame window) (frame-by-number group 0)
-                    ;; (frame-window (frame-by-number group 0)) window
+                    (frame-window (frame-by-number group 0)) window
                     (dwm-group-master-window group) window)))
            (otherwise
             (message "We already have the stack set up, so put windows there!")
@@ -427,8 +433,11 @@ desktop when starting."
                     
                     (dwm-balance-stack-tree group))
                 (dwm-group-too-many-windows ()
-                  (setf *moving-superfluous-window* window)
-                  (move-window-to-group window (find-open-dwm-group group)))))))
+                  (setf (moving-superfluous-window group) window)
+                  (let ((new-group (gnew (gen-group-name))))
+                    (move-window-to-group window new-group))
+                  ;; (move-window-to-group window (find-open-dwm-group group))
+                  )))))
          (loop for frame in (group-frames group)
                do (sync-frame-windows group frame))
          (when (null (frame-window (window-frame window)))
@@ -443,69 +452,141 @@ desktop when starting."
              collect (remove (frame-window frame) (frame-windows group frame))))))
 
 (defmethod group-delete-window ((group dwm-group) (window dwm-window))
-  (if (equal window *moving-superfluous-window*)
-      (setf *moving-superfluous-window* nil)
-      (cond ((> (length (group-windows group)) (- *maximum-dwm-group-windows* 1))
-             ;; this case keeps us from crashing stump, but doesnt fix our issues.
-             (cond ((member window (dwm-group-window-stack group))
-                    (let ((superfluous-windows
-                            (dwm-find-superfluous-windows group)))
-                      (when (> (length superfluous-windows) 0)
-                        (pull-window (car superfluous-windows)
-                                     (window-frame window)))
-                      (tree-iterate
-                       (tile-group-frame-head group (current-head group))
-                       (lambda (l) (sync-frame-windows group l)))
-                      (setf (dwm-group-master-window group)
-                            (frame-window (frame-by-number group 0)))))
-                   ((equal window (dwm-group-master-window group))
-                    (setf (dwm-group-master-window group)
-                          (frame-window (frame-by-number group 0))))))
-            ((member window (dwm-group-window-stack group))
-             (let* ((stackwin (member window (dwm-group-window-stack group)))
-                    (new-stack (remove window (dwm-group-window-stack group)))
-                    (new-master (car stackwin))
-                    (new-master-frame (window-frame new-master))
-                    (head (frame-head group new-master-frame))
-                    (tree (tile-group-frame-head group head)))
-               (setf (tile-group-frame-head group head)
-                     (remove-frame tree new-master-frame)
-                     (dwm-group-window-stack group) new-stack)
-               (tree-iterate tree
-                             (lambda (leaf)
-                               (sync-frame-windows group leaf)))
-               (focus-frame group (frame-by-number group 0))
-               (dwm-balance-stack-tree group)))
-            ((= (length (group-windows group)) 0)
-             (push (list "no windows in the group. " ;; (group-windows group)
-                         )
-                   *dwm-dbg*)
-             (let ((f (window-frame window)))
-               ;; maybe pick a new window for the old frame
-               (when (eq (frame-window f) window)
-                 (frame-raise-window group f (first (frame-windows group f))
-                                     nil))))
-            ((= (length (group-windows group)) 1)
-             ;; (push (list "only one window in the group. " (group-windows group)) *dwm-dbg*)
-             (let* ((only (pop (dwm-group-window-stack group)))
-                    (head (current-head group))
-                    (tree (tile-group-frame-head group head)))
-               (pull-window only (frame-by-number group 0))
-               (focus-frame group (frame-by-number group 0))
-               (loop for remframe in (remove (frame-by-number group 0)
-                                             (group-frames group))
-                     do (setf (tile-group-frame-head group head)
-                              (remove-frame tree remframe)))
-               (tree-iterate (tile-group-frame-head group head)
-                             (lambda (l) (sync-frame-windows group l)))
-               (setf (dwm-group-master-window group) only)))
-            (t
-             (let* ((new-master (pop (dwm-group-window-stack group)))
-                    (nm-frame (window-frame new-master))
-                    (head (current-head group))
-                    (tree (tile-group-frame-head group head)))
-               (pull-window new-master (frame-by-number group 0))
-               (setf (tile-group-frame-head group head) (remove-frame tree nm-frame))
-               (tree-iterate tree (lambda (l) (sync-frame-windows group l)))
-               (setf (dwm-group-master-window group) new-master)
-               (dwm-balance-stack-tree group))))))
+  (cond ((equal window (moving-superfluous-window group))
+         ;; if were moving a superfluous window out of the group, we dont want
+         ;; to do nothin as we aint done nothin to set it up. 
+         (setf (moving-superfluous-window group) nil))
+        ((equal window (dwm-group-master-window group))
+         ;; if were removing the master window
+         (message "group-windows: ~S" (group-windows group))
+         (let* ((new-master (pop (dwm-group-window-stack group))))
+           (if new-master
+               (let* ((new-masters-old-frame (window-frame new-master))
+                      (master-frame (frame-by-number group 0))
+                      (head (current-head group))
+                      (tree (tile-group-frame-head group head)))
+                 (cond 
+                   ((not (dwm-group-window-stack group)) ; we got 1 window left
+                    (setf (window-frame new-master) master-frame
+                          (frame-window master-frame) new-master
+                          (dwm-group-master-window group) new-master)
+                    ;; remove all other frames
+                    (loop for remframe in (remove (frame-by-number group 0)
+                                                  (group-frames group))
+                          do (setf (tile-group-frame-head group head)
+                                   (remove-frame tree remframe)))
+
+                    (setf (tile-group-current-frame group) master-frame)
+                    
+                    (focus-frame group master-frame)
+                    (update-decoration (frame-window master-frame))
+                    ;; make sure the frame is balanced - ie take whole screen
+                    ;; (setf (frame-x master-frame) 0
+                    ;;       (frame-y master-frame) 0
+                    ;;       )
+                    
+                    (loop for frame in (group-frames group)
+                          do (sync-frame-windows group frame)))
+                   (t ; we have a stack left and a new master window
+                    (setf (tile-group-frame-head group head)
+                          (remove-frame tree new-masters-old-frame)
+                          (window-frame new-master) master-frame
+                          (frame-window master-frame) new-master
+                          (dwm-group-master-window group) new-master)
+                    (dwm-balance-stack-tree group)
+                    (loop for frame in (group-frames group)
+                          do (sync-frame-windows group frame))
+                    (focus-frame group master-frame))))
+               (let ((f (window-frame window)))
+                 ;; maybe pick a new window for the old frame
+                 (when (eq (frame-window f) window)
+                   (frame-raise-window group f
+                                       (first (frame-windows group f)) nil))))))
+        ((member window (dwm-group-window-stack group))
+         ;; If were removing a stack window, we want to pop it off and reorganize
+         ;; the stack
+         (let* ((stackwin (car (member window (dwm-group-window-stack group))))
+                (new-stack (remove stackwin (dwm-group-window-stack group)))
+                (stackwins-frame (window-frame stackwin))
+                (head (frame-head group stackwins-frame))
+                (tree (tile-group-frame-head group head)))
+           (unless new-stack
+             (setf (dwm-group-master-window group) stackwin))
+           ;; we want to make the new frame tree not contain stackwins frame, as it
+           ;; isnt holding a window any more. 
+           (setf (tile-group-frame-head group head)
+                 (remove-frame tree stackwins-frame)
+                 (dwm-group-window-stack group) new-stack)
+           (tree-iterate tree (lambda (leaf) (sync-frame-windows group leaf)))
+           (focus-frame group (frame-by-number group 0))
+           (dwm-balance-stack-tree group)
+           (loop for frame in (group-frames group)
+                 do (sync-frame-windows group frame))))))
+
+;; (defmethod group-delete-window ((group dwm-group) (window dwm-window))
+;;   (if (equal window *moving-superfluous-window*)
+;;       (setf *moving-superfluous-window* nil)
+;;       (cond ((> (length (group-windows group)) (- *maximum-dwm-group-windows* 1))
+;;              ;; this case keeps us from crashing stump, but doesnt fix our issues.
+;;              (cond ((member window (dwm-group-window-stack group))
+;;                     (let ((superfluous-windows
+;;                             (dwm-find-superfluous-windows group)))
+;;                       (when (> (length superfluous-windows) 0)
+;;                         (pull-window (car superfluous-windows)
+;;                                      (window-frame window)))
+;;                       (tree-iterate
+;;                        (tile-group-frame-head group (current-head group))
+;;                        (lambda (l) (sync-frame-windows group l)))
+;;                       (setf (dwm-group-master-window group)
+;;                             (frame-window (frame-by-number group 0)))))
+;;                    ((equal window (dwm-group-master-window group))
+;;                     (setf (dwm-group-master-window group)
+;;                           (frame-window (frame-by-number group 0))))))
+;;             ((member window (dwm-group-window-stack group))
+;;              (let* ((stackwin (member window (dwm-group-window-stack group)))
+;;                     (new-stack (remove window (dwm-group-window-stack group)))
+;;                     (new-master (car stackwin))
+;;                     (new-master-frame (window-frame new-master))
+;;                     (head (frame-head group new-master-frame))
+;;                     (tree (tile-group-frame-head group head)))
+;;                (setf (tile-group-frame-head group head)
+;;                      (remove-frame tree new-master-frame)
+;;                      (dwm-group-window-stack group) new-stack)
+;;                (tree-iterate tree
+;;                              (lambda (leaf)
+;;                                (sync-frame-windows group leaf)))
+;;                (focus-frame group (frame-by-number group 0))
+;;                (dwm-balance-stack-tree group)))
+;;             ((= (length (group-windows group)) 0)
+;;              (push (list "no windows in the group. " ;; (group-windows group)
+;;                          )
+;;                    *dwm-dbg*)
+;;              (let ((f (window-frame window)))
+;;                ;; maybe pick a new window for the old frame
+;;                (when (eq (frame-window f) window)
+;;                  (frame-raise-window group f (first (frame-windows group f))
+;;                                      nil))))
+;;             ((= (length (group-windows group)) 1)
+;;              ;; (push (list "only one window in the group. " (group-windows group)) *dwm-dbg*)
+;;              (let* ((only (pop (dwm-group-window-stack group)))
+;;                     (head (current-head group))
+;;                     (tree (tile-group-frame-head group head)))
+;;                (pull-window only (frame-by-number group 0))
+;;                (focus-frame group (frame-by-number group 0))
+;;                (loop for remframe in (remove (frame-by-number group 0)
+;;                                              (group-frames group))
+;;                      do (setf (tile-group-frame-head group head)
+;;                               (remove-frame tree remframe)))
+;;                (tree-iterate (tile-group-frame-head group head)
+;;                              (lambda (l) (sync-frame-windows group l)))
+;;                (setf (dwm-group-master-window group) only)))
+;;             (t
+;;              (let* ((new-master (pop (dwm-group-window-stack group)))
+;;                     (nm-frame (window-frame new-master))
+;;                     (head (current-head group))
+;;                     (tree (tile-group-frame-head group head)))
+;;                (pull-window new-master (frame-by-number group 0))
+;;                (setf (tile-group-frame-head group head) (remove-frame tree nm-frame))
+;;                (tree-iterate tree (lambda (l) (sync-frame-windows group l)))
+;;                (setf (dwm-group-master-window group) new-master)
+;;                (dwm-balance-stack-tree group))))))
