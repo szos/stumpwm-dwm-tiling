@@ -179,7 +179,7 @@ desktop when starting."
 (defcommand dwm-switch () ()
   (prompt-for-swap-window (current-group)))
 
-(define-key *root-map* (kbd "z") "dwm-switch")
+;; (define-key *root-map* (kbd "z") "dwm-switch")
 
 (defun dwm-destroy-window-hook (window)
   (when (typep (window-group window) 'dwm-group)
@@ -264,6 +264,7 @@ desktop when starting."
            (otherwise
             ;; (message "We already have the stack set up, so put windows there!")
             (let* ((master-frame (frame-by-number group 0))
+                   (old-master (dwm-group-master-window group))
                    (frames-no-master (remove master-frame (group-frames group)))
                    (frame-to-split (car frames-no-master)))
               (handler-case
@@ -273,9 +274,10 @@ desktop when starting."
                           (dwm-group-window-stack group))
                     (setf (dwm-group-master-window group) window)
                     (setf (window-frame window) (frame-by-number group 0)
-                          (window-frame (car (dwm-group-window-stack group)))
+                          (window-frame old-master)
                           (or (car (find-empty-frames group))
-                              (error "No Empty Frames in group ~S! Something has gone terribly wrong!" group)))
+                              (error "No Empty Frames in group ~S! Something has gone terribly wrong!" group))
+                          (frame-window (window-frame old-master)) old-master)
                     (focus-frame group (frame-by-number group 0))
                     (dwm-balance-stack-tree group))
                 (dwm-group-too-many-windows ()
@@ -299,7 +301,7 @@ desktop when starting."
   (cond ((equal window (moving-superfluous-window group))
          (setf (moving-superfluous-window group) nil))
         ((equal window (dwm-group-master-window group))
-         (message "group-windows: ~S" (group-windows group))
+         ;; (message "group-windows: ~S" (group-windows group))
          (let* ((new-master (pop (dwm-group-window-stack group))))
            (if new-master
                (let* ((new-masters-old-frame (window-frame new-master))
