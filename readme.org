@@ -11,7 +11,7 @@ This implements DWM style tiling in StumpWM by defining a new group and associat
   There are also the commands ~dwm-retile~ and ~dwm-balance~, which retile all windows and balance the stack tree respectively. 
 
   To create dwm groups one uses ~gnew-dwm~ and ~gnewbg-dwm~. 
-
+  
 ** Commands 
    - gnew-dwm and gnewbg-dwm - these commands function the same as their regular counterparts.
    - dwm-balance - this is a command used to rebalance the stack. Mostly used for recovering from odd situations where the stack gets unbalanced. should eventually be unneeded.
@@ -21,6 +21,11 @@ This implements DWM style tiling in StumpWM by defining a new group and associat
    - dwm-cycle - this command takes either up or down and cycles in that direction based upon window numbers.
    - dwm-retile - this command triggers an emergency retile. it shouldnt be needed.
 
+
+* Known Issues
+  Known issues and quirks with how this group type functions. 
+  - Dialogs - Currently dialog windows cause the current master window to be placed on theb stack. For example, the window opened after adding an addon to firefox will cause the master window to be placed on the stack and the dialog window to take the entire master area.
+  - Windows and frames not syncing - Currently, windows and frames should be synced most of the time. However it can occur that they get out of sync. If they do, select the frame and call ~pull-hidden-next~  a couple times to get things synced up. 
 
 * My Testing Procedure
   Because StumpWM hangs/freezes in certain situations when using this group, the way I go about testing is as such: 
