@@ -159,16 +159,23 @@ desktop when starting."
                   (member (window-number window-or-number) stack
                           :key 'window-number)))
          (old-master (dwm-group-master-window group)))
-    (when win
-      (exchange-windows (dwm-group-master-window group) (car win))
-      (setf (dwm-group-master-window group) (car win))
-      (setf (dwm-group-window-stack group)
-            (remove (car win) (dwm-group-window-stack group)))
-      (push old-master (dwm-group-window-stack group))
-      (focus-all (car win)))))
+    (if win
+        (progn
+          (exchange-windows (dwm-group-master-window group) (car win))
+          (setf (dwm-group-master-window group) (car win))
+          (setf (dwm-group-window-stack group)
+                (remove (car win) (dwm-group-window-stack group)))
+          (push old-master (dwm-group-window-stack group))
+          (focus-all (car win)))
+        (message "Window not a member of the stack"))))
 
 (defcommand dwm-switch-to-window (number) ((:number "Window Number: "))
-  (swap-window-with-main (current-group) number))
+  (labels ((match (win)
+             (= (window-number win) number)))
+    (let ((win (find-if #'match (group-windows (current-group)))))
+      (if win
+          (swap-window-with-main (current-group) win)
+          (message "No window of number ~S" number)))))
 
 (defun prompt-for-swap-window (group)
   (let ((frame (choose-frame-by-number group)))
@@ -211,6 +218,7 @@ desktop when starting."
 ;; (defvar *dwm-map* (make-kmap))
 ;; (define-key *root-map* (kbd "d") *dwm-map*)
 ;; (define-key *dwm-map* (kbd "s") "dwm-switch")
+;; (define-key *dwm-map* (kbd "S") "dwm-switch-to-window")
 ;; (define-key *dwm-map* (kbd "RET") "dwm-focus")
 ;; (define-key *dwm-map* (kbd "n") "dwm-cycle down")
 ;; (define-key *dwm-map* (kbd "p") "dwm-cycle up")
@@ -391,4 +399,6 @@ desktop when starting."
                         (remove-frame tree frame-to-remove))
                   (focus-frame group (frame-by-number group 0))
                   (loop for frame in (group-frames group)
-                        do (sync-frame-windows group frame))))))))
+                        do (sync-frame-windows group frame)))))))
+  (loop for frame in (group-frames group)
+        do (sync-frame-windows group frame)))
