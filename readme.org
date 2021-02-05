@@ -1,6 +1,23 @@
-* dwm-groups
-  This is an attempt at implementing dwm-style tiling in stumpwm. It is currently mostly functional, but has problems. Please use the generify branch. 
-* whats working and whats not
-  Currently, it works fine to create windows in a dwm group, up until 7 windows are created. Upon creation of the 8th window, the user should be prompted for a new group name if another dwm-group isnt present. the window will be sent there. however that functionality doesnt work reliably. 
-* wanted
-  I will be the first to admit that I have little to no idea of what im doing. Id love for some help smoothing out the kinks mentioned above. 
+#+TITLE: DWM-Style Groups for StumpWM
+This implements DWM style tiling in StumpWM by defining a new group and associated add and delete window methods. *Testers are needed*; this group type still causes hangs in certain situations. 
+
+* Behavior
+  When creating a new window in a dwm-group with no windows, there is one frame filling the screen with the window in it. When creating the second window, a "stack" is created to the right of the main window, with a horizontal size ratio of 2:1. As windows are added to this group, the most recent window becomes the master window, with all others being placed on the stack. This continues up until ~(> (length (group-frames group)) *maximum-dwm-group-windows*)~, at which point a new group is created as an overflow group. This behavior should change to allow the user to select what happens to the window. Currently there is a restriction - every window must have its own frame. 
+  
+  When one wishes to switch out the master window for one on the stack, there are two commands one can use: ~dwm-switch~ and ~dwm-switch-to-window~. They both take numbers, with the former pulling the window in the frame referenced by the number and the latter pulling the window of that number. 
+
+  There are also the commands ~dwm-retile~ and ~dwm-balance~, which retile all windows and balance the stack tree respectively. 
+
+  To create dwm groups one uses ~gnew-dwm~ and ~gnewbg-dwm~. 
+
+* My Testing Procedure
+  Because StumpWM hangs/freezes in certain situations when using this group, the way I go about testing is as such: 
+  1. Log in on TTY2 and TTY3
+  2. Run ~startx~ on both TTY2 and TTY3
+  3. In the StumpWM instance running on TTY2, fire up emacs.
+  4. In the StumpWM instance running on TTY3, start a swank/slynk server.
+  5. Connect to the server running in the StumpWM image on TTY3 from emacs within the StumpWM image running on TTY2.
+  6. Navigate to the =dwm.lisp= file in emacs and press ~C-c C-l~ to load the file.
+  7. Test things out on TTY3's StumpWM image.
+  8. When StumpWM freezes or crashes, use the REPL in emacs to try and figure out what went wrong.
+  9. Reset by running ~(cl-user::quit)~, or otherwise restarting the StumpWM image. 
