@@ -156,7 +156,8 @@ desktop when starting."
   (let* ((stack (dwm-group-window-stack group))
          (win (if (numberp window-or-number)
                   (member window-or-number stack :key 'window-number)
-                  window-or-number))
+                  (member (window-number window-or-number) stack
+                          :key 'window-number)))
          (old-master (dwm-group-master-window group)))
     (when win
       (exchange-windows (dwm-group-master-window group) (car win))
@@ -171,18 +172,16 @@ desktop when starting."
 
 (defun prompt-for-swap-window (group)
   (let ((frame (choose-frame-by-number group)))
-    (swap-window-with-main group (window-number (frame-window frame)))))
+    (when frame
+      (swap-window-with-main group (window-number (frame-window frame))))))
 
 (defcommand dwm-switch () ()
   (prompt-for-swap-window (current-group)))
 
-(defun dwm-windows-above-in-stack (window &optional (group (current-group)))
-  (remove (window-number window) (dwm-group-window-stack group)
-          :key 'window-number :test '>))
-
-(defun dwm-windows-below-in-stack (window &optional (group (current-group)))
-  (remove (window-number window) (dwm-group-window-stack group)
-          :key 'window-number :test '<))
+(defcommand dwm-focus () ()
+  (if (equal (current-window) (dwm-group-master-window (current-group)))
+      (message "Focused window is already master window")
+      (swap-window-with-main (current-group) (current-window))))
 
 (defun dwm-cycle-windows (direction &optional (group (current-group)))
   (check-type group dwm-group)
@@ -196,15 +195,25 @@ desktop when starting."
                                                       cycle-to
                                                       (car sorted)))))))
 
-;;; TODO: figure out how to bind C-n/p to dwm-cycle-up/down ONLY in dwm groups. 
+;;; TODO: figure out how to bind C-n/p to dwm-cycle-up/down ONLY in dwm groups.
 
-(defcommand dwm-cycle-up () ()
-  (dwm-cycle-windows :up))
+(define-stumpwm-type :up/down (input prompt)
+  (let* ((values '(("up" :up)
+                   ("down" :down)))
+         (string (argument-pop-or-read input prompt (mapcar 'first values)))
+         (dir (second (assoc string values :test 'string-equal))))
+    (or dir
+        (throw 'error "No matching direction."))))
 
-(defcommand dwm-cycle-down () ()
-  (dwm-cycle-windows :down))
+(defcommand dwm-cycle (direction) ((:up/down "Enter up or down: "))
+  (dwm-cycle-windows direction))
 
-;; (define-key *root-map* (kbd "z") "dwm-switch")
+;; (defvar *dwm-map* (make-kmap))
+;; (define-key *root-map* (kbd "d") *dwm-map*)
+;; (define-key *dwm-map* (kbd "s") "dwm-switch")
+;; (define-key *dwm-map* (kbd "RET") "dwm-focus")
+;; (define-key *dwm-map* (kbd "n") "dwm-cycle down")
+;; (define-key *dwm-map* (kbd "p") "dwm-cycle up")
 
 (defun dwm-destroy-window-hook (window)
   (when (typep (window-group window) 'dwm-group)
