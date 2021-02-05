@@ -1,7 +1,5 @@
 * dwm-groups
   This is an attempt at implementing dwm-style tiling in stumpwm. It is currently mostly functional, but has problems. Please use the generify branch. 
-* NOTES: 
-  The generify branch is working. this will be merged into master soon. 
 * whats working and whats not
   Currently, it works fine to create windows in a dwm group, up until 7 windows are created. Upon creation of the 8th window, the user should be prompted for a new group name if another dwm-group isnt present. the window will be sent there. however that functionality doesnt work reliably. 
 * wanted
