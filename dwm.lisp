@@ -246,10 +246,10 @@ desktop when starting."
          (setf (window-frame window) (frame-by-number group 0))
          (case (length (group-windows group))
            (1
-            (message "moving from 0 to 1 window")
+            ;; (message "moving from 0 to 1 window")
             (setf (dwm-group-master-window group) window))
            (2
-            (message "moving from 1 to 2 windows")
+            ;; (message "moving from 1 to 2 windows")
             (let ((frame (frame-by-number group 0)))
               (dwm-hsplit-frame frame "2/3"))
             (let* ((prev-win (dwm-group-master-window group))
@@ -262,7 +262,7 @@ desktop when starting."
                     (frame-window (frame-by-number group 0)) window
                     (dwm-group-master-window group) window)))
            (otherwise
-            (message "We already have the stack set up, so put windows there!")
+            ;; (message "We already have the stack set up, so put windows there!")
             (let* ((master-frame (frame-by-number group 0))
                    (frames-no-master (remove master-frame (group-frames group)))
                    (frame-to-split (car frames-no-master)))
