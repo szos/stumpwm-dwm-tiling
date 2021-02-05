@@ -3,12 +3,24 @@ This implements DWM style tiling in StumpWM by defining a new group and associat
 
 * Behavior
   When creating a new window in a dwm-group with no windows, there is one frame filling the screen with the window in it. When creating the second window, a "stack" is created to the right of the main window, with a horizontal size ratio of 2:1. As windows are added to this group, the most recent window becomes the master window, with all others being placed on the stack. This continues up until ~(> (length (group-frames group)) *maximum-dwm-group-windows*)~, at which point a new group is created as an overflow group. This behavior should change to allow the user to select what happens to the window. Currently there is a restriction - every window must have its own frame. 
+
+  Currently only one master window is allowed, unlike actual dwm.
   
   When one wishes to switch out the master window for one on the stack, there are two commands one can use: ~dwm-switch~ and ~dwm-switch-to-window~. They both take numbers, with the former pulling the window in the frame referenced by the number and the latter pulling the window of that number. 
 
   There are also the commands ~dwm-retile~ and ~dwm-balance~, which retile all windows and balance the stack tree respectively. 
 
   To create dwm groups one uses ~gnew-dwm~ and ~gnewbg-dwm~. 
+
+** Commands 
+   - gnew-dwm and gnewbg-dwm - these commands function the same as their regular counterparts.
+   - dwm-balance - this is a command used to rebalance the stack. Mostly used for recovering from odd situations where the stack gets unbalanced. should eventually be unneeded.
+   - dwm-switch-to-window - This takes a window number and swaps that window with the master window
+   - dwm-switch - this draws a frame number indicator and waits for a number to be pressed. The window in that frame gets switched with the master window.
+   - dwm-focus - this swaps the current window with the master window.
+   - dwm-cycle - this command takes either up or down and cycles in that direction based upon window numbers.
+   - dwm-retile - this command triggers an emergency retile. it shouldnt be needed.
+
 
 * My Testing Procedure
   Because StumpWM hangs/freezes in certain situations when using this group, the way I go about testing is as such: 
