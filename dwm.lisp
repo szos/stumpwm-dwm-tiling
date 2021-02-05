@@ -1,8 +1,5 @@
 (in-package :stumpwm)
 
-(defparameter *dwm-dbg* nil)
-(defparameter *dwm-nf-dbg* nil)
-
 (defclass dwm-group (tile-group)
   ((master-window :initarg :master-window :initform nil
                   :accessor dwm-group-master-window)
@@ -178,6 +175,34 @@ desktop when starting."
 
 (defcommand dwm-switch () ()
   (prompt-for-swap-window (current-group)))
+
+(defun dwm-windows-above-in-stack (window &optional (group (current-group)))
+  (remove (window-number window) (dwm-group-window-stack group)
+          :key 'window-number :test '>))
+
+(defun dwm-windows-below-in-stack (window &optional (group (current-group)))
+  (remove (window-number window) (dwm-group-window-stack group)
+          :key 'window-number :test '<))
+
+(defun dwm-cycle-windows (direction &optional (group (current-group)))
+  (check-type group dwm-group)
+  (check-type direction (member :up :down))
+  (let* ((sorted (sort (group-windows group)
+                       (if (eq direction :up) '< '>)
+                       :key 'window-number))
+         (cycle-to (cadr (member (dwm-group-master-window group) sorted))))
+    (when sorted
+      (swap-window-with-main group (window-number (if cycle-to
+                                                      cycle-to
+                                                      (car sorted)))))))
+
+;;; TODO: figure out how to bind C-n/p to dwm-cycle-up/down ONLY in dwm groups. 
+
+(defcommand dwm-cycle-up () ()
+  (dwm-cycle-windows :up))
+
+(defcommand dwm-cycle-down () ()
+  (dwm-cycle-windows :down))
 
 ;; (define-key *root-map* (kbd "z") "dwm-switch")
 
