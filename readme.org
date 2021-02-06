@@ -2,31 +2,31 @@
 This implements DWM style tiling in StumpWM by defining a new group and associated add and delete window methods. *Testers are needed*; this group type still causes hangs in certain situations. 
 
 * Behavior
-  When creating a new window in a dwm-group with no windows, there is one frame filling the screen with the window in it. When creating the second window, a "stack" is created to the right of the main window, with a horizontal size ratio of 2:1. As windows are added to this group, the most recent window becomes the master window, with all others being placed on the stack. This continues up until ~(> (length (group-frames group)) *maximum-dwm-group-windows*)~, at which point a new group is created as an overflow group. This behavior should change to allow the user to select what happens to the window. Currently there is a restriction - every window must have its own frame. 
+  When creating a new window in a dynamic group with no windows, there is one frame filling the screen with the window in it. When creating the second window, a "stack" is created to the right of the main window, with a horizontal size ratio of 2:1. As windows are added to this group, the most recent window becomes the master window, with all others being placed on the stack. This continues up until ~(> (length (group-frames group)) *maximum-dynamic-group-windows*)~, at which point a new group is created as an overflow group. This behavior should change to allow the user to select what happens to the window. Currently there is a restriction - every window must have its own frame. 
 
   Currently only one master window is allowed, unlike actual dwm.
   
-  When one wishes to switch out the master window for one on the stack, there are two commands one can use: ~dwm-switch~ and ~dwm-switch-to-window~. They both take numbers, with the former pulling the window in the frame referenced by the number and the latter pulling the window of that number. 
+  When one wishes to switch out the master window for one on the stack, there are two commands one can use: ~dyn-switch~ and ~dyn-switch-to-window~. They both take numbers, with the former pulling the window in the frame referenced by the number and the latter pulling the window of that number. 
 
-  There are also the commands ~dwm-retile~ and ~dwm-balance~, which retile all windows and balance the stack tree respectively. 
+  There are also the commands ~dyn-retile~ and ~dyn-balance~, which retile all windows and balance the stack tree respectively. 
 
-  To create dwm groups one uses ~gnew-dwm~ and ~gnewbg-dwm~. 
+  To create dynamic groups one uses ~gnew-dyn~ and ~gnewbg-dyn~. 
   
 ** Commands 
-   - gnew-dwm and gnewbg-dwm - these commands function the same as their regular counterparts.
-   - dwm-balance - this is a command used to rebalance the stack. Mostly used for recovering from odd situations where the stack gets unbalanced. should eventually be unneeded.
-   - dwm-switch-to-window - This takes a window number and swaps that window with the master window
-   - dwm-switch - this draws a frame number indicator and waits for a number to be pressed. The window in that frame gets switched with the master window.
-   - dwm-focus - this swaps the current window with the master window.
-   - dwm-cycle - this command takes either up or down and cycles in that direction based upon window numbers.
-   - dwm-retile - this command triggers an emergency retile. it shouldnt be needed.
+   - gnew-dyn and gnewbg-dyn - these commands function the same as their regular counterparts.
+   - dyn-balance - this is a command used to rebalance the stack. Mostly used for recovering from odd situations where the stack gets unbalanced. should eventually be unneeded.
+   - dyn-switch-to-window - This takes a window number and swaps that window with the master window
+   - dyn-switch - this draws a frame number indicator and waits for a number to be pressed. The window in that frame gets switched with the master window.
+   - dyn-focus - this swaps the current window with the master window.
+   - dyn-cycle - this command takes either up or down and cycles in that direction based upon window numbers.
+   - dyn-retile - this command triggers an emergency retile. it shouldnt be needed.
 
 
 * Known Issues
   Known issues and quirks with how this group type functions. 
   - Dialogs - Currently dialog windows cause the current master window to be placed on theb stack. For example, the window opened after adding an addon to firefox will cause the master window to be placed on the stack and the dialog window to take the entire master area.
   - Windows and frames not syncing - Currently, windows and frames should be synced most of the time. However it can occur that they get out of sync. If they do, select the frame and call ~pull-hidden-next~  a couple times to get things synced up.
-  - Floating windows - Currently, floating windows are fully untested in dwm groups, and its unknown whether or not they will work or cause massive problems. 
+  - Floating windows - Currently, floating windows are fully untested in dynamic groups, and its unknown whether or not they will work or cause massive problems. 
 
 * My Testing Procedure
   Because StumpWM hangs/freezes in certain situations when using this group, the way I go about testing is as such: 
