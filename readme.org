@@ -30,7 +30,7 @@ This implements DWM style tiling in StumpWM by defining a new group and associat
 
 * Wanted Features
   - Make window insertion into the stack follow stack behavior - When inserting a window into the stack, the window should be placed at the top and all other windows moved down (when needed) to make it appear as an actual stack. 
-  - Change how cycling works - Cycling through windows should rotate, not swap. Currently as we cycle it just swaps with the appropriate stack window. Instead, it should rotate, with the uppermost or lowermost window being made into the master window, and all other windows being moved up or down while the previous master window gets placed at the bottom or top respectively. Here is an example using 6 windows. 
+  - Change how cycling works - Cycling through windows should rotate, not swap. Currently as we cycle it just swaps with the appropriate stack window. Instead, it should rotate, with the uppermost or lowermost window being made into the master window, and all other windows being moved up or down while the previous master window gets placed at the bottom or top respectively. Here is an example using 4 windows. 
 #+BEGIN_SRC lisp
   ---------------    ---------------
   |         | 2 |    |         | 1 |
