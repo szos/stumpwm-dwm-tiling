@@ -10,6 +10,10 @@
 
 (defclass dynamic-window (tile-window) ())
 
+;;;;;;;;;;;;;
+;;; Utils ;;;
+;;;;;;;;;;;;;
+
 (defparameter *maximum-dynamic-group-windows* 7
   "the maximum number of windows that can be placed in a dynamic-group before we 
 attempt to place them in the next dynamic-group (or generate a new one)")
@@ -170,12 +174,64 @@ desktop when starting."
         (message "Window not a member of the stack"))))
 
 (defcommand dyn-switch-to-window (number) ((:number "Window Number: "))
-  (labels ((match (win)
-             (= (window-number win) number)))
-    (let ((win (find-if #'match (group-windows (current-group)))))
-      (if win
-          (swap-window-with-main (current-group) win)
-          (message "No window of number ~S" number)))))
+  (when number
+    (labels ((match (win)
+               (= (window-number win) number)))
+      (let ((win (find-if #'match (group-windows (current-group)))))
+        (if win
+            (swap-window-with-main (current-group) win)
+            (message "No window of number ~S" number))))))
+
+(defun window-number-as-char (window)
+  (char (prin1-to-string (window-number window)) 0))
+
+(defun draw-window-numbers (group)
+  "like draw-frame-numbers, but draws the window number of the frames window"
+  (let ((screen (group-screen group)))
+    (mapcar (lambda (frame)
+              (let* ((w (xlib:create-window
+                         :parent (screen-root screen)
+                         :x (frame-x frame) :y (frame-display-y group frame)
+                         :width 1 :height 1
+                         :background (screen-fg-color screen)
+                         :border (screen-border-color screen)
+                         :border-width 1
+                         :event-mask '())))
+                (xlib:map-window w)
+                (setf (xlib:window-priority w) :above)
+                (echo-in-window w (screen-font screen)
+                                (screen-fg-color screen)
+                                (screen-bg-color screen)
+                                (string
+                                 (window-number-as-char (frame-window frame))))
+                (xlib:display-finish-output *display*)
+                (dformat 3 "mapped ~S~%" (window-number (frame-window frame)))
+                w))
+            (group-frames group))))
+
+(defun choose-window-by-number (group)
+  (let ((wins (progn (draw-frame-outlines group)
+                     (draw-window-numbers group)))
+        winner num)
+    (unwind-protect
+         (multiple-value-bind (has-click ch x y)
+             (read-one-char-or-click group)
+           (cond (has-click
+                  (dolist (f (group-frames group))
+                    (when (and (> x (frame-x f)) (> y (frame-y f)))
+                      (if winner
+                          (when (or (> (frame-x f) (frame-x winner))
+                                    (> (frame-y f) (frame-y winner)))
+                            (setf winner f))
+                          (setf winner f))))
+                  (ungrab-pointer)
+                  (frame-window winner))
+                 (ch
+                  (setf num (read-from-string (string ch) nil nil))
+                  (dformat 3 "read ~S ~S~%" ch num)
+                  (find num (group-windows group) :test '= :key 'window-number))))
+      (mapc #'xlib:destroy-window wins)
+      (clear-frame-outlines group))))
 
 (defun prompt-for-swap-window (group)
   (let ((frame (choose-frame-by-number group)))
@@ -184,6 +240,11 @@ desktop when starting."
 
 (defcommand dyn-switch () ()
   (prompt-for-swap-window (current-group)))
+
+(defcommand dyn-win-switch () ()
+  (let ((window (choose-window-by-number (current-group))))
+    (when window
+      (swap-window-with-main (current-group) window))))
 
 (defcommand dyn-focus () ()
   (if (equal (current-window) (dynamic-group-master-window (current-group)))
@@ -215,20 +276,27 @@ desktop when starting."
 (defcommand dyn-cycle (direction) ((:up/down "Enter up or down: "))
   (dyn-cycle-windows direction))
 
-(defvar *dynamic-map* (make-kmap))
-(define-key *dynamic-map* (kbd "s") "dyn-switch")
-(define-key *dynamic-map* (kbd "S") "dyn-switch-to-window")
-(define-key *dynamic-map* (kbd "RET") "dyn-focus")
-(define-key *dynamic-map* (kbd "n") "dyn-cycle down")
-(define-key *dynamic-map* (kbd "p") "dyn-cycle up")
+;;;;;;;;;;;;;;;
+;;; Keymaps ;;;
+;;;;;;;;;;;;;;;
 
-;; (define-key *root-map* (kbd "d") *dynamic-map*)
+(defvar *dynamic-group-top-map* nil)
+(defvar *dynamic-group-root-map* nil
+  "Commands specific to a dynamic group context hang from this keymap.
+It is available as part of the @dnf{prefix map} when the active group
+is a dynamic group.")
 
+(fill-keymap *dynamic-group-top-map*
+  *escape-key* '*dynamic-group-root-map*)
 
-(defun dyn-destroy-window-hook (window)
-  (when (typep (window-group window) 'dynamic-group)
-    (dyn-destroy-window window)
-    (repack-window-numbers)))
+(fill-keymap *dynamic-group-root-map*
+  (kbd "n")   "dyn-cycle down"
+  (kbd "p")   "dyn-cycle up"
+  (kbd "s")   "dyn-win-switch"
+  (kbd "RET") "dyn-focus"
+  (kbd "f")   "dyn-switch")
+
+(pushnew '(dynamic-group *dynamic-group-top-map*) *group-top-maps*)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Retile in Case of Emergency ;;;
@@ -253,6 +321,42 @@ desktop when starting."
 (defcommand dyn-retile () ()
   (dyn-emergency-retile))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; pull overflow windows ;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defgeneric pull-windows (from-group to-group)
+  (:documentation "Pull windows from FROM-GROUP to TO-GROUP. Number of windows pulled is dependent upon the type of TO-GROUP."))
+
+(defmethod pull-windows (from-group (to-group tile-group))
+  (mapc (lambda (w)
+          (move-window-to-group w to-group))
+        (group-windows from-group)))
+
+(defmethod pull-windows (from-group (to-group dynamic-group))
+  (let* ((winlist (group-windows from-group))
+         (num-wins-to-pull (abs (- *maximum-dynamic-group-windows*
+                                   (length (group-windows to-group)))))
+         (windows-to-pull (if (> (length winlist) num-wins-to-pull)
+                              (subseq winlist 0 num-wins-to-pull)
+                              winlist)))
+    (mapc (lambda (w)
+            (move-window-to-group w to-group))
+          windows-to-pull)))
+
+(defun move-overflow-windows-to-group (group)
+  (when-let ((from (find-group (current-screen) ".Overflow")))
+    (pull-windows from group)))
+
+(defun sync-all-frames (group)
+  (loop for frame in (group-frames group)
+        do (sync-frame-windows group frame)))
+
+(defcommand dyn-get-overflow-windows () ()
+  (move-overflow-windows-to-group (current-group))
+  (sync-all-frames (current-group))
+  (focus-frame (current-group) (frame-by-number (current-group) 0)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; group-add-window method ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -272,7 +376,7 @@ desktop when starting."
 
 (let ((counter 0))
   (defun gen-group-name ()
-    (format nil "Overflow group ~S" (incf counter))))
+    (format nil ".Overflow group ~S" (incf counter))))
 
 (defmethod group-add-window ((group dynamic-group) window &key frame raise &allow-other-keys)
   (cond ((typep window 'float-window)
