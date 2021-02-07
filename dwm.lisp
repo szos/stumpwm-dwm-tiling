@@ -321,6 +321,42 @@ is a dynamic group.")
 (defcommand dyn-retile () ()
   (dyn-emergency-retile))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; pull overflow windows ;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defgeneric pull-windows (from-group to-group)
+  (:documentation "Pull windows from FROM-GROUP to TO-GROUP. Number of windows pulled is dependent upon the type of TO-GROUP."))
+
+(defmethod pull-windows (from-group (to-group tile-group))
+  (mapc (lambda (w)
+          (move-window-to-group w to-group))
+        (group-windows from-group)))
+
+(defmethod pull-windows (from-group (to-group dynamic-group))
+  (let* ((winlist (group-windows from-group))
+         (num-wins-to-pull (abs (- *maximum-dynamic-group-windows*
+                                   (length (group-windows to-group)))))
+         (windows-to-pull (if (> (length winlist) num-wins-to-pull)
+                              (subseq winlist 0 num-wins-to-pull)
+                              winlist)))
+    (mapc (lambda (w)
+            (move-window-to-group w to-group))
+          windows-to-pull)))
+
+(defun move-overflow-windows-to-group (group)
+  (when-let ((from (find-group (current-screen) ".Overflow")))
+    (pull-windows from group)))
+
+(defun sync-all-frames (group)
+  (loop for frame in (group-frames group)
+        do (sync-frame-windows group frame)))
+
+(defcommand dyn-get-overflow-windows () ()
+  (move-overflow-windows-to-group (current-group))
+  (sync-all-frames (current-group))
+  (focus-frame (current-group) (frame-by-number (current-group) 0)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; group-add-window method ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -340,7 +376,7 @@ is a dynamic group.")
 
 (let ((counter 0))
   (defun gen-group-name ()
-    (format nil "Overflow group ~S" (incf counter))))
+    (format nil ".Overflow group ~S" (incf counter))))
 
 (defmethod group-add-window ((group dynamic-group) window &key frame raise &allow-other-keys)
   (cond ((typep window 'float-window)
