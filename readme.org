@@ -1,5 +1,7 @@
 #+TITLE: DWM-Style Groups for StumpWM
 
+*NB*: This repo is no longer relevant and is out of date. Please see PR #851 in StumpWM for further discussion. 
+
 *NB*: Work is continuing in a fork of StumpWM, in order to ensure good integration. Please see this https://github.com/szos/stumpwm/tree/dynamic-window-management repo for the latest developments
 
 This implements DWM style tiling in StumpWM by defining a new group and associated add and delete window methods. *Testers are needed*; this group type still causes hangs in certain situations. 
